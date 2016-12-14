@@ -93,3 +93,6 @@ for(i in 1:6){
   imat[i,] <- c.vec(r.m3l2A, spp = i, iter = 200, e.thres = .1)
 }
 imat 
+
+
+taxa1 <- c("Akkermansia muciniphilia", "AAlistipes putredinis", "Bacteroides acidifaciens", "Bacteroides fragilis", "Bacteroides stercoris", "Bacteroides thetaiotaomicron", "Bacteroides uniformis", "Bacteroides vulgatus", "Escherichia coli", "Eubacterium rectale", "Faecalibacterium prausnitzii", "Parebacteroides distasonis", "Roseburia intestinalis", "Sisymbrium irio")
