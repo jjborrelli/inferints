@@ -33,7 +33,7 @@ step_forward <- function(data, x, errorthres = 1){
   
   f1 <- as.formula(paste("vi ~ ", paste(xnam[x], collapse= "+")))
   fit.init <- lm(f1, data = data$train)
-  err <- sum((data$test$vi-predict(fit.init, newdata = data$test))^2)
+  err <- mean((data$test$vi-predict(fit.init, newdata = data$test))^2)/var(data$train$vi)
   
   active <- x
   
@@ -47,7 +47,7 @@ step_forward <- function(data, x, errorthres = 1){
     })
     
     err.step <- sapply(fit.step, function(y){
-      sum((data$test$vi-predict(y, newdata = data$test))^2)
+      mean((data$test$vi-predict(y, newdata = data$test))^2)/var(data$test$vi)
     })
     
     min.err <- which.min(err.step)
@@ -69,7 +69,7 @@ step_forward <- function(data, x, errorthres = 1){
 
 
 iter <- 200
-spp <- 1
+spp <- 2
 comat <- matrix(0, nrow = iter, ncol = ncol(data$train)-1)
 for(i in 1:iter){
   fitmod <- r.m3l2A %>% data_setup(xi = spp) %>% data_split %>%
