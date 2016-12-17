@@ -25,4 +25,4 @@ fit1 <- lm(resp~A+E, data = mydat[t1,])
 error2 <- sum(predict(fit1, newdata = mydat[-t1,]) - mydat[-t1, "resp"])
 
 ((error1-error2)/error2)*100
-summary(fit)
+summary(fit1)
