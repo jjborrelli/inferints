@@ -4,18 +4,22 @@ library(magrittr)
 spp <- 6
 fitmod <- r.m3l2A %>% data_setup(xi = spp) %>% data_split %>% step_forward(x = spp, errorthres = 1)
 fitmod
+data <-  r.m3l2A %>% data_setup(xi = spp) %>% data_split
 
 data_setup <- function(data, xi){
   # take in matrix with columns = taxa, rows = timepoints
   # make sure we are dealing with relative abundances
-  if(sum(round(rowSums(data), 2) != 1.00) > 0){stop("Needs relative abundance")}
+  #if(sum(round(rowSums(data), 2) != 1.00) > 0){stop("Needs relative abundance")}
   
+  rows <- as.numeric(sapply(strsplit(row.names(data), "X"), "[[", 2))
+  chrows <- rows[which((rows-1 )%in% rows)]
   colnames(data) <- sapply(strsplit(colnames(data), ";"), tail, 1)
   
-  resp <- data[data[,xi] != 0, xi]
+  resp <- data[row.names(data) %in% paste0("X", chrows), xi]
+  resp <- resp[resp!=0]
   
+  M <- apply(data[row.names(data) %in% paste0("X", chrows-1),], 2, function(x){x - median(x)})[1:nrow(data[row.names(data) %in% paste0("X", chrows-1),]),]
   vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
-  M <- apply(data[data[,xi] != 0,], 2, function(x){x - median(x)})[1:(nrow(data[data[,xi] != 0,])-1),]
   
   return(data.frame(vi = vi, M))
 }
@@ -73,14 +77,60 @@ step_forward <- function(data, x, errorthres = 1){
   return(fit.fin)
 }
 
+step_forward.alt <- function(data, x, errorthres = 1){
+  trainMAT <- as.matrix(data[[1]][,-1])
+  trainRESP <- data[[1]]$vi
+  testMAT <- as.matrix(data[[2]][,-1])
+  testRESP <- data[[2]]$vi
+  
+  #
+  allsp <- 1:ncol(trainMAT)
+  active <- x
+  
+  # Fit initial regression
+  ci <- ginv(trainMAT[,c(x)]) %*% trainRESP
+  e1 <- mean((testMAT[,c(x)] %*% ci-testRESP)^2)/var(testRESP)
+  
+  cond <- FALSE
+  while(!cond){
+    errs <- sapply(allsp[-active], function(y){
+      ci2 <- ginv(trainMAT[,c(active,y)]) %*% trainRESP
+      e2 <- mean(((testMAT[,c(active,y)] %*% ci2)-testRESP)^2)/var(testRESP)
+      return(e2)
+    })
+    
+    ediff <- 100 * (e1 - min((errs)))/e1
+    
+    if(ediff >= errorthres){
+      e1 <- min(errs)
+      active <- c(active, allsp[-active][which.min(errs)])
+    }else{
+      cond <- TRUE
+    }
+    
+    if(length(active) == length(allsp)){
+      cond <- TRUE
+    }
+    
+  }
+  
+  cif <- ginv(trainMAT[,active]) %*% trainRESP
+  
+  res <- matrix(0, nrow = 1, ncol = ncol(trainMAT))
+  res[,active] <- cif
+  
+  return(res)
+}
+
 
 iter <- 200
-spp <- 7
+spp <- 1
 comat <- matrix(0, nrow = iter, ncol = ncol(r.m3l2A))
+fitmod <- list()
 for(i in 1:iter){
   data <- r.m3l2A %>% data_setup(xi = spp) %>% data_split
-  fitmod <- step_forward(data = data, x = spp, errorthres = 1)
-  comat[i,colnames(data$train)[-1]%in%names(fitmod$coefficients[-1])] <- fitmod$coefficients[-1]
+  comat[i,] <- step_forward.alt(data = data, x = spp, errorthres = 3)
+  print(i)
 }
 colMeans(comat)
 
@@ -92,14 +142,27 @@ c.vec <- function(idata, spp, iter = 200, e.thres = 1){
     co1 <- colnames(dat[[1]])[-1]%in%names(fitmod$coefficients[-1])
     comat[i,co1] <- fitmod$coefficients[-1]
   }
-  return(colMeans(comat))
+  return(apply(comat, 2, median))
 }
 
+c.vec.alt <- function(idata, spp, iter = 200, e.thres = 1){
+  comat <- matrix(0, nrow = iter, ncol = ncol(idata))
+  for(i in 1:iter){
+    data <- idata %>% data_setup(xi = spp) %>% data_split
+    comat[i,] <- step_forward.alt(data = data, x = spp, errorthres = e.thres)
+  }
+  return(apply(comat, 2, median))
+}
+
+
 imat <- matrix(0, ncol(r.m3l2A), ncol(r.m3l2A))
+imat.alt <- matrix(0, ncol(r.m3l2A), ncol(r.m3l2A))
 for(i in 1:ncol(r.m3l2A)){
-  imat[i,] <- c.vec(r.m3l2A, spp = i, iter = 200, e.thres = 3)
+  imat[i,] <- c.vec(r.m3l2A, spp = i, iter = 200, e.thres = 1)
+  imat.alt[i,] <- c.vec.alt(r.m3l2A, spp = i, iter = 1, e.thres = 1)
 }
 imat 
+imat.alt
 
 
 
@@ -116,3 +179,12 @@ for(i in 1:ncol(r.m3l6A)){
 imat 
 
 taxa1 <- c("Akkermansia muciniphilia", "AAlistipes putredinis", "Bacteroides acidifaciens", "Bacteroides fragilis", "Bacteroides stercoris", "Bacteroides thetaiotaomicron", "Bacteroides uniformis", "Bacteroides vulgatus", "Escherichia coli", "Eubacterium rectale", "Faecalibacterium prausnitzii", "Parebacteroides distasonis", "Roseburia intestinalis", "Sisymbrium irio")
+
+
+library(MASS)
+
+ci <- ginv(as.matrix(fitmod[[1]][,c(2,3,5)]))%*%fitmod[[1]][,1]
+e1 <- sum((as.matrix(fitmod[[1]][,c(2,3,5)]) %*% (ci)-fitmod[[1]]$vi)^2)
+
+ci2 <- ginv(as.matrix(fitmod[[1]][,c(2,3,5,6)]))%*%fitmod[[1]][,1]
+e2 <- sum((rowSums(as.matrix(fitmod[[1]][,c(2,3,5,6)]) %*% (ci2))-fitmod[[1]]$vi)^2)

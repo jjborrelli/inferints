@@ -1,8 +1,8 @@
 library(MASS)
-m3l2 <- read.csv("Data/L2.csv", row.names = 1)
+m3l2 <- read.csv("Data/L3.csv", row.names = 1)
 
 r.m3l2 <- t(apply(m3l2, 2, function(x) x/sum(x)))
-r.m3l2A <- t(apply(m3l2[which(apply(r.m3l2, 2, function(x) sum(x != 0)) >300),], 2, function(x) x/sum(x)))
+r.m3l2A <- t(apply(m3l2, 2, function(x) x/sum(x)))[,apply(m3l2, 1, function(x) sum(x!=0)) > 100]#[which(apply(r.m3l2, 2, function(x) sum(x != 0)) >100),])
 
 v1 <- log(r.m3l2A[2:332,1]) - log(r.m3l2A[1:331,1])
 M <- apply(r.m3l2A, 2, function(x) x - median(x))
