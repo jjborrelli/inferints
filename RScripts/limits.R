@@ -2,36 +2,10 @@
 library(magrittr)
 
 spp <- 6
-fitmod <- r.m3l2A %>% data_setup(xi = spp) %>% data_split %>% step_forward(x = spp, errorthres = 1)
+fitmod <- m3l2 %>% data_setup(xi = spp) %>% data_split %>% step_forward(x = spp, errorthres = 1)
 fitmod
 data <-  r.m3l2A %>% data_setup(xi = spp) %>% data_split
 
-data_setup <- function(data, xi){
-  # take in matrix with columns = taxa, rows = timepoints
-  # make sure we are dealing with relative abundances
-  #if(sum(round(rowSums(data), 2) != 1.00) > 0){stop("Needs relative abundance")}
-  
-  rows <- as.numeric(sapply(strsplit(row.names(data), "X"), "[[", 2))
-  chrows <- rows[which((rows-1 )%in% rows)]
-  colnames(data) <- sapply(strsplit(colnames(data), ";"), tail, 1)
-  
-  resp <- data[row.names(data) %in% paste0("X", chrows), xi]
-  resp <- resp[resp!=0]
-  
-  M <- apply(data[row.names(data) %in% paste0("X", chrows-1),], 2, function(x){x - median(x)})[1:nrow(data[row.names(data) %in% paste0("X", chrows-1),]),]
-  vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
-  
-  return(data.frame(vi = vi, M))
-}
-
-data_split <- function(data){
-  len1 <- nrow(data)
-  len2 <- ceiling(len1/2)
-  times1 <- sort(sample(2:len1, len2))
-  times2 <- times1 -1
-  
-  return(list(train = data[times1,], test = data[times2,]))
-}
 
 
 
@@ -125,19 +99,19 @@ step_forward.alt <- function(data, x, errorthres = 1){
 
 iter <- 200
 spp <- 1
-comat <- matrix(0, nrow = iter, ncol = ncol(r.m3l2A))
+comat <- matrix(0, nrow = iter, ncol = 11)
 fitmod <- list()
 for(i in 1:iter){
-  data <- r.m3l2A %>% data_setup(xi = spp) %>% data_split
+  data <- m3l2 %>% data_setup(level = "phylum", xi = spp, o = T) %>% data_split()
   comat[i,] <- step_forward.alt(data = data, x = spp, errorthres = 3)
   print(i)
 }
 colMeans(comat)
 
-c.vec <- function(idata, spp, iter = 200, e.thres = 1){
-  comat <- matrix(0, nrow = iter, ncol = ncol(idata))
+c.vec <- function(idata, lev, spp, iter = 200, e.thres = 1){
+  comat <- matrix(0, nrow = iter, ncol = 11)
   for(i in 1:iter){
-    dat <- idata %>% data_setup(xi = spp) %>% data_split
+    dat <- idata %>% data_setup(level = lev, xi = spp, o = T) %>% data_split
     fitmod <- step_forward(dat, x = spp, errorthres = e.thres)
     co1 <- colnames(dat[[1]])[-1]%in%names(fitmod$coefficients[-1])
     comat[i,co1] <- fitmod$coefficients[-1]
@@ -145,21 +119,21 @@ c.vec <- function(idata, spp, iter = 200, e.thres = 1){
   return(apply(comat, 2, median))
 }
 
-c.vec.alt <- function(idata, spp, iter = 200, e.thres = 1){
-  comat <- matrix(0, nrow = iter, ncol = ncol(idata))
+c.vec.alt <- function(idata, lev, spp, iter = 200, e.thres = 1){
+  comat <- matrix(0, nrow = iter, ncol = 11)
   for(i in 1:iter){
-    data <- idata %>% data_setup(xi = spp) %>% data_split
+    data <- idata %>% data_setup(level = lev, xi = spp, o = T) %>% data_split
     comat[i,] <- step_forward.alt(data = data, x = spp, errorthres = e.thres)
   }
-  return(apply(comat, 2, median))
+  return(apply(comat, 2, mean))
 }
 
 
-imat <- matrix(0, ncol(r.m3l2A), ncol(r.m3l2A))
-imat.alt <- matrix(0, ncol(r.m3l2A), ncol(r.m3l2A))
-for(i in 1:ncol(r.m3l2A)){
-  imat[i,] <- c.vec(r.m3l2A, spp = i, iter = 200, e.thres = 1)
-  imat.alt[i,] <- c.vec.alt(r.m3l2A, spp = i, iter = 1, e.thres = 1)
+imat <- matrix(0, 11, 11)
+imat.alt <- matrix(0, 11, 11)
+for(i in 1:11){
+  imat[i,] <- c.vec(m3l2, lev = "phylum", spp = i, iter = 200, e.thres = 1)
+  imat.alt[i,] <- c.vec.alt(m3l2, lev = "phylum", spp = i, iter = 200, e.thres = 1)
 }
 imat 
 imat.alt
