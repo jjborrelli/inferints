@@ -20,7 +20,7 @@ taxa_names <- function(x){
   if(!is.na(n1$family[1])){n1$family <- sapply(strsplit(n1$family, "f__"), function(x){if(length(x) == 2){x[2]}else{NA}})}
   if(!is.na(n1$genus[1])){n1$genus <- sapply(strsplit(n1$genus, "g__"), function(x){if(length(x) == 2){x[2]}else{NA}})}
   
-  n1 <- t(apply(n1, 1, function(x){x[is.na(x)] <- paste("f", tail(unlist(x[!is.na(x)]), 1), sep = "__");return(x)}))
+  n1 <- t(apply(n1, 1, function(x){x[is.na(x)] <- paste("na_", tail(unlist(x[!is.na(x)]), 1), sep = "__");return(x)}))
   
   return(n1)
 }
