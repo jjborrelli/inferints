@@ -14,8 +14,8 @@ step_forward <- function(data, x, errorthres = 1){
   
   f1 <- as.formula(paste("vi ~ ", paste(xnam[x], collapse= "+")))
   fit.init <- lm(f1, data = data$train)
-  #err <- mean((data$test$vi-predict(fit.init, newdata = data$test))^2)/var(data$train$vi)
-  err <- sum((data$test$vi-predict(fit.init, newdata = data$test))^2)
+  err <- mean((data$test$vi-predict(fit.init, newdata = data$test))^2)/var(data$train$vi)
+  #err <- sum((data$test$vi-predict(fit.init, newdata = data$test))^2)
   
   active <- x
   cond <- FALSE
@@ -30,14 +30,14 @@ step_forward <- function(data, x, errorthres = 1){
     })
     
     err.step <- sapply(fit.step, function(y){
-      #mean((data$test$vi-predict(y, newdata = data$test))^2)/var(data$test$vi)
-      sum((data$test$vi-predict(y, newdata = data$test))^2)
+      mean((data$test$vi-predict(y, newdata = data$test))^2)/var(data$test$vi)
+      #sum((data$test$vi-predict(y, newdata = data$test))^2)
     })
     
     min.err <- which.min(err.step)
     err.diff <- 100 * (err - err.step[min.err])/err
     
-    if(err.diff > errorthres){
+    if(err.diff >= errorthres){
       err <- err.step[min.err]
       active <- c(active,(1:length(xnam))[-x][min.err])
     }else{
@@ -63,7 +63,7 @@ step_forward.alt <- function(data, x, errorthres = 1){
   
   # Fit initial regression
   ci <- ginv(trainMAT[,c(x)]) %*% trainRESP
-  e1 <- mean((testMAT[,c(x)] %*% ci-testRESP)^2)/var(testRESP)
+  e1 <- mean(((testMAT[,c(x)] %*% ci)-testRESP)^2)/var(testRESP)
   
   cond <- FALSE
   while(!cond){
@@ -73,7 +73,7 @@ step_forward.alt <- function(data, x, errorthres = 1){
       return(e2)
     })
     
-    ediff <- 100 * (e1 - min((errs)))/e1
+    ediff <- 100 * ((e1 - min(errs))/e1)
     
     if(ediff >= errorthres){
       e1 <- min(errs)
@@ -162,3 +162,56 @@ e1 <- sum((as.matrix(fitmod[[1]][,c(2,3,5)]) %*% (ci)-fitmod[[1]]$vi)^2)
 
 ci2 <- ginv(as.matrix(fitmod[[1]][,c(2,3,5,6)]))%*%fitmod[[1]][,1]
 e2 <- sum((rowSums(as.matrix(fitmod[[1]][,c(2,3,5,6)]) %*% (ci2))-fitmod[[1]]$vi)^2)
+
+
+
+
+
+
+
+
+
+
+######################################
+######################################
+######################################
+### Using data from Fisher and Mehta
+
+fmdat <- read.csv("Data/m3unionFM.csv", row.names = 1)
+head(fmdat)
+
+tp <- as.numeric(rownames(fmdat))
+before <- tp[2:length(tp)] - 1
+t2 <- tp[-1][before %in% tp]
+t2ind <- which(tp %in% t2)
+t1 <- t2-1
+t1ind <- t2ind-1
+tpairs <- cbind(t1, t2, t1ind, t2ind)
+
+strt <- Sys.time()
+errT <- 3
+imat <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+imat2 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+for(xi in 1:ncol(fmdat)){
+  resp <- fmdat[, xi]
+  vi <- log(resp[tpairs[,"t2ind"]]) - log(resp[tpairs[,"t1ind"]])
+  
+  M <- apply(fmdat[tpairs[,"t1ind"],], 2, function(x){x - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  
+  vi <- vi[!is.nan(vi) & !is.infinite(vi)]
+  
+  rmat <- matrix(nrow = 200, ncol = ncol(fmdat))
+  rmat2 <- matrix(0, nrow = 200, ncol = ncol(fmdat))
+  for(i in 1:200){
+    ds1 <- data_split(data.frame(vi, M))
+    rmat[i,] <- step_forward.alt(ds1, xi, errT)
+    sf2 <- step_forward(ds1, xi, errT)
+    rmat2[i, colnames(fmdat) %in% names(coefficients(sf2))] <- coefficients(sf2)[-1]
+  }
+  imat[xi,] <- apply(rmat, 2, median)
+  imat2[xi,] <- apply(rmat2, 2, median)
+}
+ends <- Sys.time()
+ends - strt
+imat
+imat2
