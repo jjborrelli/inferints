@@ -80,10 +80,11 @@ data_setup <- function(data, level, xi, o = FALSE){
 data_split <- function(data){
   len1 <- nrow(data)
   len2 <- ceiling(len1/2)
-  times1 <- sort(sample(2:len1, len2))
-  times2 <- times1 -1
+  brk1 <- sample(1:len1, len2)
+  vec1 <- rep(FALSE, len1)
+  vec1[brk1] <- TRUE
   
-  return(list(train = data[times1,], test = data[times2,]))
+  return(list(train = data[vec1,], test = data[!vec1,]))
 }
 
 # Caporaso Male Data Set

@@ -97,60 +97,6 @@ step_forward.alt <- function(data, x, errorthres = 1){
 }
 
 
-iter <- 200
-spp <- 1
-comat <- matrix(0, nrow = iter, ncol = 11)
-fitmod <- list()
-for(i in 1:iter){
-  data <- m3l2 %>% data_setup(level = "phylum", xi = spp, o = T) %>% data_split()
-  comat[i,] <- step_forward.alt(data = data, x = spp, errorthres = 3)
-  print(i)
-}
-colMeans(comat)
-
-c.vec <- function(idata, lev, spp, iter = 200, e.thres = 1){
-  comat <- matrix(0, nrow = iter, ncol = 11)
-  for(i in 1:iter){
-    dat <- idata %>% data_setup(level = lev, xi = spp, o = T) %>% data_split
-    fitmod <- step_forward(dat, x = spp, errorthres = e.thres)
-    co1 <- colnames(dat[[1]])[-1]%in%names(fitmod$coefficients[-1])
-    comat[i,co1] <- fitmod$coefficients[-1]
-  }
-  return(apply(comat, 2, median))
-}
-
-c.vec.alt <- function(idata, lev, spp, iter = 200, e.thres = 1){
-  comat <- matrix(0, nrow = iter, ncol = 11)
-  for(i in 1:iter){
-    data <- idata %>% data_setup(level = lev, xi = spp, o = T) %>% data_split
-    comat[i,] <- step_forward.alt(data = data, x = spp, errorthres = e.thres)
-  }
-  return(apply(comat, 2, mean))
-}
-
-
-imat <- matrix(0, 11, 11)
-imat.alt <- matrix(0, 11, 11)
-for(i in 1:11){
-  imat[i,] <- c.vec(m3l2, lev = "phylum", spp = i, iter = 200, e.thres = 1)
-  imat.alt[i,] <- c.vec.alt(m3l2, lev = "phylum", spp = i, iter = 200, e.thres = 1)
-}
-imat 
-imat.alt
-
-
-
-m3l6 <- as.matrix(read.csv("Data/M3L6gut.csv", row.names = 1))
-
-r.m3l6 <- m3l6[which(apply(m3l6, 1, function(x) sum(x !=0)) >= 332),]
-r.m3l6A <- t(apply(r.m3l6, 2, function(x) x/sum(x)))
-
-
-imat <- matrix(0, ncol(r.m3l6A), ncol(r.m3l6A))
-for(i in 1:ncol(r.m3l6A)){
-  imat[i,] <- c.vec(r.m3l6A, spp = i, iter = 200, e.thres = 3)
-}
-imat 
 
 taxa1 <- c("Akkermansia muciniphilia", "AAlistipes putredinis", "Bacteroides acidifaciens", "Bacteroides fragilis", "Bacteroides stercoris", "Bacteroides thetaiotaomicron", "Bacteroides uniformis", "Bacteroides vulgatus", "Escherichia coli", "Eubacterium rectale", "Faecalibacterium prausnitzii", "Parebacteroides distasonis", "Roseburia intestinalis", "Sisymbrium irio")
 
@@ -205,13 +151,15 @@ for(xi in 1:ncol(fmdat)){
   for(i in 1:200){
     ds1 <- data_split(data.frame(vi, M))
     rmat[i,] <- step_forward.alt(ds1, xi, errT)
-    sf2 <- step_forward(ds1, xi, errT)
-    rmat2[i, colnames(fmdat) %in% names(coefficients(sf2))] <- coefficients(sf2)[-1]
+    #sf2 <- step_forward(ds1, xi, errT)
+    #rmat2[i, colnames(fmdat) %in% names(coefficients(sf2))] <- coefficients(sf2)[-1]
   }
   imat[xi,] <- apply(rmat, 2, median)
-  imat2[xi,] <- apply(rmat2, 2, median)
+  #imat2[xi,] <- apply(rmat2, 2, median)
 }
 ends <- Sys.time()
 ends - strt
 imat
 imat2
+
+
