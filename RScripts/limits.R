@@ -52,9 +52,9 @@ step_forward <- function(data, x, errorthres = 1){
 }
 
 step_forward.alt <- function(data, x, errorthres = 1){
-  trainMAT <- as.matrix(data[[1]][,-1])
+  trainMAT <- (as.matrix(data[[1]][,-1]))
   trainRESP <- data[[1]]$vi
-  testMAT <- as.matrix(data[[2]][,-1])
+  testMAT <- (as.matrix(data[[2]][,-1]))
   testRESP <- data[[2]]$vi
   
   #
@@ -62,8 +62,8 @@ step_forward.alt <- function(data, x, errorthres = 1){
   active <- x
   
   # Fit initial regression
-  ci <- ginv(trainMAT[,c(x)]) %*% trainRESP
-  e1 <- mean(((testMAT[,c(x)] %*% ci)-testRESP)^2)/var(testRESP)
+  ci <- ginv(trainMAT[,c(x,2)]) %*% trainRESP
+  e1 <- mean(((testMAT[,c(x,2)] %*% ci)-testRESP)^2)/var(testRESP)
   
   cond <- FALSE
   while(!cond){
@@ -88,7 +88,7 @@ step_forward.alt <- function(data, x, errorthres = 1){
     
   }
   
-  cif <- ginv(trainMAT[,active]) %*% trainRESP
+  cif <- ginv(rbind(testMAT, trainMAT)[,active]) %*% c(testRESP, trainRESP)
   
   res <- matrix(0, nrow = 1, ncol = ncol(trainMAT))
   res[,active] <- cif
@@ -137,12 +137,13 @@ tpairs <- cbind(t1, t2, t1ind, t2ind)
 strt <- Sys.time()
 errT <- 3
 imat <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
-imat2 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+#imat2 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
 for(xi in 1:ncol(fmdat)){
   resp <- fmdat[, xi]
   vi <- log(resp[tpairs[,"t2ind"]]) - log(resp[tpairs[,"t1ind"]])
-  
-  M <- apply(fmdat[tpairs[,"t1ind"],], 2, function(x){x - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  #vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
+  M <- apply(fmdat, 2, function(x){x[tpairs[,"t1ind"]] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  #M <-  apply(fmdat, 2, function(x){x[1:(length(resp) -1)] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
   
   vi <- vi[!is.nan(vi) & !is.infinite(vi)]
   
