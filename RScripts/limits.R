@@ -135,32 +135,48 @@ t1ind <- t2ind-1
 tpairs <- cbind(t1, t2, t1ind, t2ind)
 
 strt <- Sys.time()
-errT <- 3
+errT.1 <- .1
+errT1 <- 1
+errT2 <- 2
+errT3 <- 3
+errT5 <- 5
 imat <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
-#imat2 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+imat1 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+imat2 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+imat3 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+imat5 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
 for(xi in 1:ncol(fmdat)){
   resp <- fmdat[, xi]
-  vi <- log(resp[tpairs[,"t2ind"]]) - log(resp[tpairs[,"t1ind"]])
-  #vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
-  M <- apply(fmdat, 2, function(x){x[tpairs[,"t1ind"]] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
-  #M <-  apply(fmdat, 2, function(x){x[1:(length(resp) -1)] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  #vi <- log(resp[tpairs[,"t2ind"]]) - log(resp[tpairs[,"t1ind"]])
+  vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
+  #M <- apply(fmdat, 2, function(x){x[tpairs[,"t1ind"]] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  M <-  apply(fmdat, 2, function(x){x[1:(length(resp) -1)] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
   
   vi <- vi[!is.nan(vi) & !is.infinite(vi)]
   
   rmat <- matrix(nrow = 200, ncol = ncol(fmdat))
-  rmat2 <- matrix(0, nrow = 200, ncol = ncol(fmdat))
+  rmat1 <- matrix(nrow = 200, ncol = ncol(fmdat))
+  rmat2 <- matrix(nrow = 200, ncol = ncol(fmdat))
+  rmat3 <- matrix(nrow = 200, ncol = ncol(fmdat))
+  rmat5 <- matrix(nrow = 200, ncol = ncol(fmdat))
   for(i in 1:200){
     ds1 <- data_split(data.frame(vi, M))
-    rmat[i,] <- step_forward.alt(ds1, xi, errT)
-    #sf2 <- step_forward(ds1, xi, errT)
-    #rmat2[i, colnames(fmdat) %in% names(coefficients(sf2))] <- coefficients(sf2)[-1]
+    rmat[i,] <- step_forward.alt(ds1, xi, errT.1)
+    rmat1[i,] <- step_forward.alt(ds1, xi, errT1)
+    rmat2[i,] <- step_forward.alt(ds1, xi, errT2)
+    rmat3[i,] <- step_forward.alt(ds1, xi, errT3)
+    rmat5[i,] <- step_forward.alt(ds1, xi, errT5)
   }
   imat[xi,] <- apply(rmat, 2, median)
-  #imat2[xi,] <- apply(rmat2, 2, median)
+  imat1[xi,] <- apply(rmat1, 2, median)
+  imat2[xi,] <- apply(rmat2, 2, median)
+  imat3[xi,] <- apply(rmat3, 2, median)
+  imat5[xi,] <- apply(rmat5, 2, median)
 }
 ends <- Sys.time()
 ends - strt
-imat
-imat2
-
-
+cor.test(imat * apply(fmdat, 2, median), gp1$p$cij)
+cor.test(imat1 * apply(fmdat, 2, median), gp1$p$cij)
+cor.test(imat2 * apply(fmdat, 2, median), gp1$p$cij)
+cor.test(imat3 * apply(fmdat, 2, median), gp1$p$cij)
+cor.test(imat5 * apply(fmdat, 2, median), gp1$p$cij)
