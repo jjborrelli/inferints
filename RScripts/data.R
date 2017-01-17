@@ -1,4 +1,45 @@
 
+# FUNCTION; Simulate Data
+
+lvfm <- function(times, state, parms){
+  cij <- parms$cij
+  x.med <- parms$xmed
+  ni <- parms$ni
+  
+  xi <- matrix(state, nrow = nrow(cij), ncol = length(times))
+  for(i in 2:length(times)){
+    xi[,i] <- exp(ni[i,] + log(xi[,i-1]) + cij %*% (xi[,i-1] - x.med))
+    #xi[xi < 1e-5] <- 0
+  }
+  
+  return(xi)
+}
+
+getpars <- function(N, L, times){
+  testmat <- matrix(0, N, N)
+  xbar <- rlnorm(N, 0, .1)
+  diag(testmat) <- runif(N, -1.9, -.1)/xbar
+  
+  for(i in 1:L){
+    r1 <- sample(1:N, 1)
+    r2 <- sample(1:N, 1)
+    testmat[r1, r2] <- rnorm(1,0,.5)
+    testmat[r2, r1] <- rnorm(1,0,.5)
+  }
+  
+  allpar <- list(cij = testmat, xmed = xbar, ni = matrix(rnorm(times*N, 0, .1), ncol = N, nrow = times))
+  
+  return(list(p = allpar, m = xbar))
+}
+
+gp1 <- getpars(15, 20, 200)
+
+matplot(t(lvfm(1:200, gp1$m, gp1$p)), typ = "l")
+dyn <- (lvfm(1:200, gp1$m, gp1$p))[,1:200]
+fmdat <- t(apply(dyn, 2, function(x) x/sum(x)))
+
+xbar * exp(testmat %*% (xbar - xbar))
+
 # FUNCTION: Get taxonomy
 
 taxa_names <- function(x){
