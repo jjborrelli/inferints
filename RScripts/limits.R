@@ -62,8 +62,8 @@ step_forward.alt <- function(data, x, errorthres = 1){
   active <- x
   
   # Fit initial regression
-  ci <- ginv(trainMAT[,c(x,2)]) %*% trainRESP
-  e1 <- mean(((testMAT[,c(x,2)] %*% ci)-testRESP)^2)/var(testRESP)
+  ci <- ginv(trainMAT[,c(x)]) %*% trainRESP
+  e1 <- mean(((ci %*% testMAT[,c(x)] )-testRESP)^2)/var(testRESP)
   
   cond <- FALSE
   while(!cond){
@@ -123,60 +123,42 @@ e2 <- sum((rowSums(as.matrix(fitmod[[1]][,c(2,3,5,6)]) %*% (ci2))-fitmod[[1]]$vi
 ######################################
 ### Using data from Fisher and Mehta
 
-fmdat <- read.csv("Data/m3unionFM.csv", row.names = 1)
+fmdat <- read.csv("Data/f4unionFM.csv", row.names = 1)
 head(fmdat)
 
 tp <- as.numeric(rownames(fmdat))
 before <- tp[2:length(tp)] - 1
-t2 <- tp[-1][before %in% tp]
-t2ind <- which(tp %in% t2)
-t1 <- t2-1
-t1ind <- t2ind-1
-tpairs <- cbind(t1, t2, t1ind, t2ind)
+t1 <- which(before %in% tp)
+t2 <- which(before %in% tp)+1
+
+# is this using simulated data? 
+sim <- FALSE
 
 strt <- Sys.time()
-errT.1 <- .1
-errT1 <- 1
-errT2 <- 2
-errT3 <- 3
-errT5 <- 5
+errT <- 1
 imat <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
-imat1 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
-imat2 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
-imat3 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
-imat5 <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
 for(xi in 1:ncol(fmdat)){
   resp <- fmdat[, xi]
-  #vi <- log(resp[tpairs[,"t2ind"]]) - log(resp[tpairs[,"t1ind"]])
-  vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
-  #M <- apply(fmdat, 2, function(x){x[tpairs[,"t1ind"]] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
-  M <-  apply(fmdat, 2, function(x){x[1:(length(resp) -1)] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  
+  if(sim){
+    vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
+    M <-  apply(fmdat, 2, function(x){x[1:(length(resp) -1)] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  }else{
+    vi <- log(resp[t2]) - log(resp[t1])
+    M <- apply(fmdat, 2, function(x){x[t1] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  }
   
   vi <- vi[!is.nan(vi) & !is.infinite(vi)]
   
   rmat <- matrix(nrow = 200, ncol = ncol(fmdat))
-  rmat1 <- matrix(nrow = 200, ncol = ncol(fmdat))
-  rmat2 <- matrix(nrow = 200, ncol = ncol(fmdat))
-  rmat3 <- matrix(nrow = 200, ncol = ncol(fmdat))
-  rmat5 <- matrix(nrow = 200, ncol = ncol(fmdat))
   for(i in 1:200){
     ds1 <- data_split(data.frame(vi, M))
-    rmat[i,] <- step_forward.alt(ds1, xi, errT.1)
-    rmat1[i,] <- step_forward.alt(ds1, xi, errT1)
-    rmat2[i,] <- step_forward.alt(ds1, xi, errT2)
-    rmat3[i,] <- step_forward.alt(ds1, xi, errT3)
-    rmat5[i,] <- step_forward.alt(ds1, xi, errT5)
+    rmat[i,] <- step_forward.alt(ds1, xi, errT)
   }
   imat[xi,] <- apply(rmat, 2, median)
-  imat1[xi,] <- apply(rmat1, 2, median)
-  imat2[xi,] <- apply(rmat2, 2, median)
-  imat3[xi,] <- apply(rmat3, 2, median)
-  imat5[xi,] <- apply(rmat5, 2, median)
 }
 ends <- Sys.time()
 ends - strt
+imat * apply(fmdat, 2, median)
+
 cor.test(imat * apply(fmdat, 2, median), gp1$p$cij)
-cor.test(imat1 * apply(fmdat, 2, median), gp1$p$cij)
-cor.test(imat2 * apply(fmdat, 2, median), gp1$p$cij)
-cor.test(imat3 * apply(fmdat, 2, median), gp1$p$cij)
-cor.test(imat5 * apply(fmdat, 2, median), gp1$p$cij)

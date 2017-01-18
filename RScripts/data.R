@@ -32,10 +32,10 @@ getpars <- function(N, L, times){
   return(list(p = allpar, m = xbar))
 }
 
-gp1 <- getpars(15, 20, 200)
+gp1 <- getpars(10, 10, 2000)
 
-matplot(t(lvfm(1:200, gp1$m, gp1$p)), typ = "l")
-dyn <- (lvfm(1:200, gp1$m, gp1$p))[,1:200]
+matplot(t(lvfm(1:2000, gp1$m, gp1$p)), typ = "l")
+dyn <- (lvfm(1:2000, gp1$m, gp1$p))[,1800:2000]
 fmdat <- t(apply(dyn, 2, function(x) x/sum(x)))
 
 xbar * exp(testmat %*% (xbar - xbar))
@@ -127,6 +127,43 @@ data_split <- function(data){
   
   return(list(train = data[vec1,], test = data[!vec1,]))
 }
+
+# FUNCTION LIMITS
+limits <- function(fmdat, errT, bag, sim = F){
+  if(!sim){
+    tp <- as.numeric(rownames(fmdat))
+    before <- tp[2:length(tp)] - 1
+    t1 <- which(before %in% tp)
+    t2 <- which(before %in% tp)+1
+  }
+  imat <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
+  for(xi in 1:ncol(fmdat)){
+    resp <- fmdat[, xi]
+    
+    if(sim){
+      vi <- log(resp[2:length(resp)]) - log(resp[1:(length(resp)-1)])
+      M <-  apply(fmdat, 2, function(x){x[1:(length(resp) -1)] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+    }else{
+      vi <- log(resp[t2]) - log(resp[t1])
+      M <- apply(fmdat, 2, function(x){x[t1] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+    }
+    
+    vi <- vi[!is.nan(vi) & !is.infinite(vi)]
+    
+    rmat <- matrix(nrow = bag, ncol = ncol(fmdat))
+    for(i in 1:bag){
+      ds1 <- data_split(data.frame(vi, M))
+      rmat[i,] <- step_forward.alt(ds1, xi, errT)
+    }
+    imat[xi,] <- apply(rmat, 2, median)
+  }
+
+  return(imat * mean(apply(fmdat, 2, median)))
+}
+
+testdat <- read.csv("~/Desktop/testdat.csv", header = F)
+limits(testdat, 5, 100, sim = T)
+
 
 # Caporaso Male Data Set
 
