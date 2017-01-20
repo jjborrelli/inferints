@@ -122,7 +122,7 @@ e2 <- sum((rowSums(as.matrix(fitmod[[1]][,c(2,3,5,6)]) %*% (ci2))-fitmod[[1]]$vi
 ######################################
 ######################################
 ### Using data from Fisher and Mehta
-
+library(MASS)
 fmdat <- read.csv("Data/f4unionFM.csv", row.names = 1)
 head(fmdat)
 
