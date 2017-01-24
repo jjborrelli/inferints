@@ -62,8 +62,8 @@ step_forward.alt <- function(data, x, errorthres = 1){
   active <- x
   
   # Fit initial regression
-  ci <- ginv(trainMAT[,c(x)]) %*% trainRESP
-  e1 <- mean(((ci %*% testMAT[,c(x)] )-testRESP)^2)/var(testRESP)
+  ci <- ginv(trainMAT[,active]) %*% trainRESP
+  e1 <- mean(((ci %*% testMAT[,active] )-testRESP)^2)/var(testRESP)
   
   cond <- FALSE
   while(!cond){
@@ -116,26 +116,28 @@ e2 <- sum((rowSums(as.matrix(fitmod[[1]][,c(2,3,5,6)]) %*% (ci2))-fitmod[[1]]$vi
 
 
 
-
-
 ######################################
 ######################################
 ######################################
 ### Using data from Fisher and Mehta
 library(MASS)
-fmdat <- read.csv("Data/f4unionFM.csv", row.names = 1)
+fmdat <- read.csv("Data/m3unionFM.csv", row.names = 1)
 head(fmdat)
 
-tp <- as.numeric(rownames(fmdat))
+zeros <- apply(fmdat, 1, function(x) sum(x == 0) > 0)
+fmdat2 <- fmdat[!zeros,]
+
+tp <- as.numeric(rownames(fmdat2))
 before <- tp[2:length(tp)] - 1
 t1 <- which(before %in% tp)
 t2 <- which(before %in% tp)+1
 
+
 # is this using simulated data? 
-sim <- FALSE
+sim <- TRUE
 
 strt <- Sys.time()
-errT <- 1
+errT <- 3
 imat <- matrix(nrow = ncol(fmdat), ncol = ncol(fmdat))
 for(xi in 1:ncol(fmdat)){
   resp <- fmdat[, xi]
@@ -145,13 +147,13 @@ for(xi in 1:ncol(fmdat)){
     M <-  apply(fmdat, 2, function(x){x[1:(length(resp) -1)] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
   }else{
     vi <- log(resp[t2]) - log(resp[t1])
-    M <- apply(fmdat, 2, function(x){x[t1] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+    M <- apply(fmdat2, 2, function(x){x[t1] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
   }
   
   vi <- vi[!is.nan(vi) & !is.infinite(vi)]
   
-  rmat <- matrix(nrow = 200, ncol = ncol(fmdat))
-  for(i in 1:200){
+  rmat <- matrix(nrow = 100, ncol = ncol(fmdat))
+  for(i in 1:100){
     ds1 <- data_split(data.frame(vi, M))
     rmat[i,] <- step_forward.alt(ds1, xi, errT)
   }
@@ -162,3 +164,68 @@ ends - strt
 imat * apply(fmdat, 2, median)
 
 cor.test(imat * apply(fmdat, 2, median), gp1$p$cij)
+
+
+
+
+######################################
+######################################
+######################################
+### Using data from Fisher and Mehta
+library(MASS)
+fmdat <- read.csv("Data/m3unionFM.csv", row.names = 1)
+head(fmdat)
+
+zeros <- apply(fmdat, 1, function(x) sum(x == 0) > 0)
+fmdat2 <- fmdat[!zeros,]
+
+tp <- as.numeric(rownames(fmdat2))
+before <- tp[2:length(tp)] - 1
+t1 <- which(before %in% tp)
+t2 <- which(before %in% tp)+1
+
+
+sdata <- function(data, ds, t1, t2, xi){
+
+  resp <- data[, xi]
+  vi <- log(resp[t2]) - log(resp[t1])
+  M <- apply(data, 2, function(x){x[t1] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  vi <- vi[!is.nan(vi) & !is.infinite(vi)]
+  
+  df.f <- data.frame(vi, M)
+  df1 <- df.f[ds, ]
+  df2 <- df.f[!ds, ]
+  
+  return(list(df1, df2))
+}
+
+
+data_split2 <- function(data, t1){
+  len1 <- nrow(data[t1,])
+  len2 <- ceiling(len1/2)
+  brk1 <- sample(1:len1, len2)
+  vec1 <- rep(FALSE, len1)
+  vec1[brk1] <- TRUE
+  
+  return((vec1))
+}
+
+
+t1 = 1:99;t2 = 2:100
+errT <- 5
+rmat <- lapply(1:ncol(fmdat), function(x) matrix(nrow = 200, ncol = ncol(fmdat)))
+for(i in 1:200){
+  ds1 <- data_split2(fmdat, t1)
+  for(xi in 1:ncol(fmdat)){
+    ds2 <- sdata(fmdat, ds1, t1, t2, xi)
+    rmat[[xi]][i,] <- step_forward.alt(ds2, xi, errT)
+  }
+}
+
+imat <- sapply(rmat, function(x) apply(x, 2, median))
+imat * apply(fmdat, 2, median)
+sum(sign(imat * apply(fmdat, 2, median)) != sign(gp1$p$cij))
+
+test <- cbind(as.vector(imat * apply(fmdat, 2, median)), as.vector(gp1$p$cij))
+cor.test(test[rowSums(test) != 0,1],test[rowSums(test) != 0,2])
+cor.test(as.vector(imat * apply(fmdat, 2, median)), as.vector(gp1$p$cij))

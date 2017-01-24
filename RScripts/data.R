@@ -37,7 +37,7 @@ gp1 <- getpars(10, 10, 2000)
 matplot(t(lvfm(1:100, gp1$m, gp1$p)), typ = "l")
 dyn <- (lvfm(1:100, gp1$m, gp1$p))
 fmdat <- t(apply(dyn, 2, function(x) x/sum(x)))
-
+matplot(fmdat, typ = "l")
 xbar * exp(testmat %*% (xbar - xbar))
 
 # FUNCTION: Get taxonomy
@@ -127,6 +127,17 @@ data_split <- function(data){
   
   return(list(train = data[vec1,], test = data[!vec1,]))
 }
+
+data_split2 <- function(data){
+  len1 <- nrow(data)-1
+  len2 <- ceiling(len1/2)
+  brk1 <- sample(1:len1, len2)
+  vec1 <- rep(FALSE, len1)
+  vec1[brk1] <- TRUE
+  
+  return(which(vec1))
+}
+
 
 # FUNCTION LIMITS
 limits <- function(fmdat, errT, bag, sim = F){
