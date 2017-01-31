@@ -1,0 +1,265 @@
+---
+title: "LIMITS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = NA, warning = F, comment = NA)
+```
+
+## Loading Libraries
+```{r libs}
+library(MASS)
+library(magrittr)
+```
+
+
+## FUNCTIONS
+
+### Simulation
+
+The `lv_ricker` function simulates the dynamics of a community according to the equation: 
+
+$$
+x_i(t+\delta t) = \eta_i(t)x_i(t)e^{\delta \sum_j c_{ij}(x_j(t) - <x_j>)},
+$$ 
+where the $\eta_i$ represents stochastic noise, $c_{ij}$ is the directed interaction between species $i$ and species $j$, and $<x_j>$ is the median abundance of species $j$. Taking the natural log of the previous equation gives: 
+
+$$
+ln \ x_i(t+1) - ln \ x_i(t) = \zeta_i(t) + \sum_j c_{ij}(x_j(t) - <x_j>),
+$$
+where $\zeta_i(t) = ln \ \eta_i(t)$. In the `lvfm` function I have replaced this equation by solving for $x_i(t+1)$, such that:
+
+$$
+x_i(t+1) = e^{\eta_i(t) + ln \ x_i + \sum c_{ij}(x_j(t) - <x_j>)}.
+$$
+The function's inputs are `times`, `state`, and `parms`, which are (1) the vector of timepoints, (2) initial abundances, and (3) a 3 part parameter list (the interaction matrix, and equilibrium abundances, and random variations) respectively. The output of `lv_ricker` is a matrix of abundances, where the rows represent different timepoints and the columns represent species/OTUs. 
+
+```{r lvmod}
+lv_ricker <- function(times, state, parms){
+  cij <- parms$cij
+  x.med <- parms$xmed
+  ni <- parms$ni
+  
+  xi <- matrix(state, nrow = nrow(cij), ncol = length(times))
+  for(i in 2:length(times)){
+    xi[,i] <- exp(ni[i,] + log(xi[,i-1]) + cij %*% (xi[,i-1] - x.med))
+    #xi[xi < 1e-5] <- 0
+  }
+  
+  return(xi)
+}
+```
+
+
+The `get_pars` function is a helper function for `lv_ricker` that generates the parameter list and initial abundance inputs for the latter. The inputs of `get_pars` are the number of desired species/OTUs (`N`), the number of interactions among them (`L`), and the number of timesteps going into `lv_ricker` (`times`). The output is a list, the first element of which may be passed to the `parms` argument of `lvfm`, and the second element may be passed to the `state` argument of `lv_ricker`. 
+
+```{r gpfun}
+get_pars <- function(N, L, times){
+  testmat <- matrix(0, N, N)
+  xbar <- rlnorm(N, 0, .1)
+  diag(testmat) <- runif(N, -1.9, -.1)/xbar
+  
+  for(i in 1:L){
+    r1 <- sample(1:N, 1)
+    r2 <- sample(1:N, 1)
+    testmat[r1, r2] <- rnorm(1,0,.5)
+    testmat[r2, r1] <- rnorm(1,0,.5)
+  }
+  
+  allpar <- list(cij = testmat, xmed = xbar, ni = matrix(rnorm(times*N, 0, .1), ncol = N, nrow = times))
+  
+  return(list(p = allpar, m = xbar))
+}
+```
+
+
+### Setting up the data
+
+These functions take in the abundance data and partition it into training and testing sets, and also clean the data to only include sequential time points. The `data_split` function takes the data matrix as an input (`data`), and returns a logical vector that can be used to split the data into two sets. It also ensures that only sequential time points are included. 
+
+```{r ds1}
+data_split <- function(data){
+  if(is.null(rownames(data))){tp <- 1:nrow(data)}else{tp <- as.numeric(rownames(data))}
+  before <- tp[2:length(tp)] - 1
+  t1 <- which(before %in% tp)
+  
+  len1 <- nrow(data[t1,])
+  len2 <- ceiling(len1/2)
+  brk1 <- sample(1:len1, len2)
+  vec1 <- rep(FALSE, len1)
+  vec1[brk1] <- TRUE
+  
+  return((vec1))
+}
+```
+
+The `data_setup`function takes the original data (`data`), the logical vector output from `data_split` (`ds`), and the particular species (column) of interest (`xi`). The function sets up the data for the step-wise linear regression method of the LIMITS algorithm. The regression is based on the log equation above, such that $v_i = c_iX$, where $c_i$ is row $i$ of the interaction matrix, $X$ is the matrix whose rows are $X_l = {x_1(t) - <x_1>, ..., x_n(t) - <x_n>}$, and $v_i$ is a vector given by $v_i = {ln \ x_i(1) - ln \ x_i(0), ..., ln \ x_i(T) - ln \ x_i(T - 1)}$. Thus, the output of the `data_setup` function is a list of two dataframes whose first column is $v_i$ and remaining columns constitute $X$. 
+
+```{r ds2}
+data_setup <- function(data, ds, xi){
+  if(is.null(rownames(data))){tp <- 1:nrow(data)}else{tp <- as.numeric(rownames(data))}
+  before <- tp[2:length(tp)] - 1
+  t1 <- which(before %in% tp)
+  t2 <- which(before %in% tp)+1
+
+  resp <- data[, xi]
+  vi <- log(resp[t2]) - log(resp[t1])
+  M <- apply(data, 2, function(x){x[t1] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
+  vi <- vi[!is.nan(vi) & !is.infinite(vi)]
+  
+  df.f <- data.frame(vi, M)
+  df1 <- df.f[ds, ]
+  df2 <- df.f[!ds, ]
+  
+  return(list(df1, df2))
+}
+
+```
+
+### Regression  
+
+The forward stepwise regression of LIMITS is encoded in the `step_forward` function. The inputs are the list of dataframes coming out of `data_setup` (`data`), the species of interest (`x`, whose interactions we are trying to predict), and the threshold for increasing the error to include a new interaction (`errorthres`, controls the sparsity of the interaction matrix). 
+
+```{r sffun}
+step_forward <- function(data, x, errorthres = 1){
+  trainMAT <- (as.matrix(data[[1]][,-1]))
+  trainRESP <- data[[1]]$vi
+  testMAT <- (as.matrix(data[[2]][,-1]))
+  testRESP <- data[[2]]$vi
+  
+  #
+  allsp <- 1:ncol(trainMAT)
+  active <- x
+  
+  # Fit initial regression
+  ci <- ginv(trainMAT[,active]) %*% trainRESP
+  e1 <- mean(((ci %*% testMAT[,active] )-testRESP)^2)/var(testRESP)
+  
+  cond <- FALSE
+  while(!cond){
+    errs <- sapply(allsp[-active], function(y){
+      ci2 <- ginv(trainMAT[,c(active,y)]) %*% trainRESP
+      e2 <- mean(((testMAT[,c(active,y)] %*% ci2)-testRESP)^2)/var(testRESP)
+      return(e2)
+    })
+    
+    ediff <- 100 * ((e1 - min(errs))/e1)
+    
+    if(ediff >= errorthres){
+      e1 <- min(errs)
+      active <- c(active, allsp[-active][which.min(errs)])
+    }else{
+      cond <- TRUE
+    }
+    
+    if(length(active) == length(allsp)){
+      cond <- TRUE
+    }
+    
+  }
+  
+  cif <- ginv(rbind(testMAT, trainMAT)[,active]) %*% c(testRESP, trainRESP)
+  
+  res <- matrix(0, nrow = 1, ncol = ncol(trainMAT))
+  res[,active] <- cif
+  
+  return(res)
+}
+```
+
+### LIMITS
+
+The `limits` function applies the previous functions for the iterative procedure of inferring interactions. It takes in the abundance data, the error threshold, and the number of iterations to be used in the bagging of inferred interactions. The output is the interaction matrix multiplied by the median abundance of each species (as required if the abundance data is relative rather than absolute).  
+
+```{r limfun}
+limits <- function(dat, errT, n){
+  rmat <- lapply(1:ncol(dat), function(x) matrix(nrow = n, ncol = ncol(dat)))
+  for(i in 1:n){
+    ds1 <- data_split(dat)
+    for(xi in 1:ncol(dat)){
+      ds2 <- data_setup(dat, ds1, xi)
+      rmat[[xi]][i,] <- step_forward(ds2, xi, errT)
+    }
+  }
+
+  imat <- sapply(rmat, function(x) apply(x, 2, median))
+  intmat <- imat * apply(dat, 2, median)
+  
+  return(intmat)
+}
+```
+
+
+## Simulated Example 
+
+### Dynamics  
+
+```{r dyn1}
+t.fin <- 1000
+N.species <- 10
+N.links <- 10 
+
+cond <- FALSE
+while(!cond){
+  gp1 <- get_pars(N.species, N.links, t.fin)
+  dyn <- lv_ricker(1:t.fin, gp1$m, gp1$p)
+  
+  if(sum(is.nan(dyn)) > 0){
+    cond <- FALSE
+    next
+  }else if(sum(dyn[,t.fin] < 10^-5) > 0){
+    cond <- FALSE
+    next
+  }else{
+    cond <- TRUE
+  }
+}
+
+simdat <- t(apply(dyn, 2, function(x) x/sum(x)))
+```
+
+```{r echo = F}
+matplot(simdat, typ = "l", xlab = "Time", ylab = "Relative Abundance")
+```
+
+### LIMITS on simulated data
+```{r limitrun}
+ltest <- limits(simdat, 5, 200)
+
+ct.est <- cor.test(as.vector(ltest), as.vector(gp1$p$cij))$estimate
+```
+
+```{r echo = F}
+plot(as.vector(ltest), as.vector(gp1$p$cij), xlab = "Predicted", ylab = "Observed")
+abline(a = 0, b = 1, xpd = F)
+text(round(ct.est,2), x = quantile(as.vector(ltest), .03), y = quantile(as.vector(gp1$p$cij), .97), cex = 3)
+```
+
+
+## Mathematica Simulated Data
+
+```{r compare}
+fm.obs <- read.csv("~/Desktop/testdata.csv")
+fmtest <- limits(fm.obs, 5, 100)
+
+ma.obs <- read.csv("~/Desktop/mathmat-obs.csv", header = F)
+ma.pred <- read.csv("~/Desktop/mathmat-pred.csv", header = F)
+
+df1 <- data.frame(mypred = as.vector(fmtest), real = unlist(ma.obs), fmpred = unlist(ma.pred))
+
+mycor <- cor.test(df1$mypred, df1$real)
+fmcor <- cor.test(df1$fmpred, df1$real)
+```
+
+```{r echo = F}
+cat("\n", "Correlation between my code output and known cij = ", mycor$estimate, "\n", "Correlation between Mathematica code output and known cij = ", fmcor$estimate, "/n")
+```
+
+
+```{r echo = F}
+knitr::kable(table(sign(df1$mypred), sign(df1$real)), caption = "R Code", format = "html", align = "c")
+knitr::kable(table(sign(df1$fmpred), sign(df1$real)), caption = "Mathematica", format = "html", align = "c")
+```
+
+
