@@ -32,10 +32,10 @@ getpars <- function(N, L, times){
   return(list(p = allpar, m = xbar))
 }
 
-gp1 <- getpars(10, 10, 2000)
+gp1 <- getpars(15, 15, 2000)
 
 matplot(t(lvfm(1:100, gp1$m, gp1$p)), typ = "l")
-dyn <- (lvfm(1:100, gp1$m, gp1$p))
+dyn <- (lvfm(1:1000, gp1$m, gp1$p))
 fmdat <- t(apply(dyn, 2, function(x) x/sum(x)))
 matplot(fmdat, typ = "l")
 xbar * exp(testmat %*% (xbar - xbar))

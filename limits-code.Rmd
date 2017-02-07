@@ -76,28 +76,10 @@ get_pars <- function(N, L, times){
 
 ### Setting up the data
 
-These functions take in the abundance data and partition it into training and testing sets, and also clean the data to only include sequential time points. The `data_split` function takes the data matrix as an input (`data`), and returns a logical vector that can be used to split the data into two sets. It also ensures that only sequential time points are included. 
-
-```{r ds1}
-data_split <- function(data){
-  if(is.null(rownames(data))){tp <- 1:nrow(data)}else{tp <- as.numeric(rownames(data))}
-  before <- tp[2:length(tp)] - 1
-  t1 <- which(before %in% tp)
-  
-  len1 <- nrow(data[t1,])
-  len2 <- ceiling(len1/2)
-  brk1 <- sample(1:len1, len2)
-  vec1 <- rep(FALSE, len1)
-  vec1[brk1] <- TRUE
-  
-  return((vec1))
-}
-```
-
 The `data_setup`function takes the original data (`data`), the logical vector output from `data_split` (`ds`), and the particular species (column) of interest (`xi`). The function sets up the data for the step-wise linear regression method of the LIMITS algorithm. The regression is based on the log equation above, such that $v_i = c_iX$, where $c_i$ is row $i$ of the interaction matrix, $X$ is the matrix whose rows are $X_l = {x_1(t) - <x_1>, ..., x_n(t) - <x_n>}$, and $v_i$ is a vector given by $v_i = {ln \ x_i(1) - ln \ x_i(0), ..., ln \ x_i(T) - ln \ x_i(T - 1)}$. Thus, the output of the `data_setup` function is a list of two dataframes whose first column is $v_i$ and remaining columns constitute $X$. 
 
 ```{r ds2}
-data_setup <- function(data, ds, xi){
+data_setup <- function(data, xi){
   if(is.null(rownames(data))){tp <- 1:nrow(data)}else{tp <- as.numeric(rownames(data))}
   before <- tp[2:length(tp)] - 1
   t1 <- which(before %in% tp)
@@ -108,15 +90,29 @@ data_setup <- function(data, ds, xi){
   M <- apply(data, 2, function(x){x[t1] - median(x)})[!is.nan(vi) & !is.infinite(vi),]
   vi <- vi[!is.nan(vi) & !is.infinite(vi)]
   
-  df.f <- data.frame(vi, M)
-  df1 <- df.f[ds, ]
-  df2 <- df.f[!ds, ]
   
-  return(list(df1, df2))
+  df.f <- data.frame(vi, M)
+  
+  return(df.f)
 }
 
 ```
+These functions take in the abundance data and partition it into training and testing sets, and also clean the data to only include sequential time points. The `data_split` function takes the data matrix as an input (`data`), and returns a logical vector that can be used to split the data into two sets. It also ensures that only sequential time points are included. 
 
+```{r ds1}
+data_split <- function(data){
+  len1 <- nrow(data)
+  len2 <- ceiling(len1/2)
+  brk1 <- sample(1:len1, len2)
+  vec1 <- rep(FALSE, len1)
+  vec1[brk1] <- TRUE
+  
+  df1 <- data[vec1,]
+  df2 <- data[!vec1,]
+  
+  return(list(df1, df2))
+}
+```
 ### Regression  
 
 The forward stepwise regression of LIMITS is encoded in the `step_forward` function. The inputs are the list of dataframes coming out of `data_setup` (`data`), the species of interest (`x`, whose interactions we are trying to predict), and the threshold for increasing the error to include a new interaction (`errorthres`, controls the sparsity of the interaction matrix). 
@@ -134,7 +130,7 @@ step_forward <- function(data, x, errorthres = 1){
   
   # Fit initial regression
   ci <- ginv(trainMAT[,active]) %*% trainRESP
-  e1 <- mean(((ci %*% testMAT[,active] )-testRESP)^2)/var(testRESP)
+  e1 <- mean(((testMAT[,active] %*% ci)-testRESP)^2)/var(testRESP)
   
   cond <- FALSE
   while(!cond){
@@ -175,16 +171,17 @@ The `limits` function applies the previous functions for the iterative procedure
 ```{r limfun}
 limits <- function(dat, errT, n){
   rmat <- lapply(1:ncol(dat), function(x) matrix(nrow = n, ncol = ncol(dat)))
-  for(i in 1:n){
-    ds1 <- data_split(dat)
-    for(xi in 1:ncol(dat)){
-      ds2 <- data_setup(dat, ds1, xi)
+  
+  for(xi in 1:ncol(dat)){
+    ds1 <- data_setup(dat, xi)
+    for(i in 1:n){
+      ds2 <- data_split(ds1)
       rmat[[xi]][i,] <- step_forward(ds2, xi, errT)
     }
   }
 
   imat <- sapply(rmat, function(x) apply(x, 2, median))
-  intmat <- imat * apply(dat, 2, median)
+  intmat <- t(imat) * apply(dat, 2, median)
   
   return(intmat)
 }
@@ -250,10 +247,13 @@ df1 <- data.frame(mypred = as.vector(fmtest), real = unlist(ma.obs), fmpred = un
 
 mycor <- cor.test(df1$mypred, df1$real)
 fmcor <- cor.test(df1$fmpred, df1$real)
+
+predcor <- cor.test(df1$fmpred, df1$mypred)
+
 ```
 
 ```{r echo = F}
-cat("\n", "Correlation between my code output and known cij = ", mycor$estimate, "\n", "Correlation between Mathematica code output and known cij = ", fmcor$estimate, "/n")
+cat("\n", "Correlation between my code output and known cij = ", mycor$estimate, "\n", "Correlation between Mathematica code output and known cij = ", fmcor$estimate, "\n")
 ```
 
 
@@ -262,4 +262,13 @@ knitr::kable(table(sign(df1$mypred), sign(df1$real)), caption = "R Code", format
 knitr::kable(table(sign(df1$fmpred), sign(df1$real)), caption = "Mathematica", format = "html", align = "c")
 ```
 
+
+Real Data
+
+```{r}
+mg1 <- read.csv("~/Desktop/GitHub/inferints/Data/m3unionFM.csv", row.names = 1)
+
+mgl <- limits(mg1, 3, 100)
+plot(igraph::graph.adjacency(abs(sign(mgl)), diag = F))
+```
 

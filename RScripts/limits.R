@@ -185,7 +185,11 @@ t1 <- which(before %in% tp)
 t2 <- which(before %in% tp)+1
 
 
-sdata <- function(data, ds, t1, t2, xi){
+sdata <- function(data, ds, xi){
+  tp <- as.numeric(rownames(data))
+  before <- tp[2:length(tp)] - 1
+  t1 <- which(before %in% tp)
+  t2 <- which(before %in% tp)+1
 
   resp <- data[, xi]
   vi <- log(resp[t2]) - log(resp[t1])
