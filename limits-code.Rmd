@@ -155,7 +155,8 @@ step_forward <- function(data, x, errorthres = 1){
     
   }
   
-  cif <- ginv(rbind(testMAT, trainMAT)[,active]) %*% c(testRESP, trainRESP)
+  #cif <- ginv(rbind(testMAT, trainMAT)[,active]) %*% c(testRESP, trainRESP)
+  cif <- ginv(trainMAT[,active]) %*% trainRESP
   
   res <- matrix(0, nrow = 1, ncol = ncol(trainMAT))
   res[,active] <- cif
