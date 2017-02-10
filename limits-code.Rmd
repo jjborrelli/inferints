@@ -84,6 +84,8 @@ data_setup <- function(data, xi){
   before <- tp[2:length(tp)] - 1
   t1 <- which(before %in% tp)
   t2 <- which(before %in% tp)+1
+  #t1 <- 1:(nrow(data)-1)
+  #t2 <- 2:nrow(data)
 
   resp <- data[, xi]
   vi <- log(resp[t2]) - log(resp[t1])
@@ -259,8 +261,8 @@ cat("\n", "Correlation between my code output and known cij = ", mycor$estimate,
 
 
 ```{r echo = F}
-knitr::kable(table(sign(df1$mypred), sign(df1$real)), caption = "R Code", format = "html", align = "c")
-knitr::kable(table(sign(df1$fmpred), sign(df1$real)), caption = "Mathematica", format = "html", align = "c")
+#knitr::kable(table(sign(df1$mypred), sign(df1$real)), caption = "R Code", format = "html", align = "c")
+#knitr::kable(table(sign(df1$fmpred), sign(df1$real)), caption = "Mathematica", format = "html", align = "c")
 ```
 
 
@@ -271,5 +273,16 @@ mg1 <- read.csv("~/Desktop/GitHub/inferints/Data/m3unionFM.csv", row.names = 1)
 
 mgl <- limits(mg1, 3, 100)
 plot(igraph::graph.adjacency(abs(sign(mgl)), diag = F))
+```
+
+```{r}
+mg1.imp <- matrix(nrow = 442, ncol = ncol(mg1))
+mg1.imp[0:441 %in% as.numeric(rownames(mg1)),] <- as.matrix(mg1)
+for(i in which(!0:441 %in% as.numeric(rownames(mg1)))){
+  mg1.imp[i,] <- mg1.imp[sample(which(0:441 %in% as.numeric(rownames(mg1))), 1),]
+}
+
+mgl2 <- limits(mg1.imp, 3, 100)
+plot(igraph::graph.adjacency(abs(sign(mgl2)), diag = F))
 ```
 
