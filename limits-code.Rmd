@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, message = NA, warning = F, comment = NA)
 ```{r libs}
 library(MASS)
 library(magrittr)
+library(reshape2)
 ```
 
 
@@ -197,8 +198,8 @@ limits <- function(dat, errT, n){
 
 ```{r dyn1}
 t.fin <- 1000
-N.species <- 10
-N.links <- 10 
+N.species <- 20
+N.links <- 30 
 
 cond <- FALSE
 while(!cond){
@@ -217,6 +218,11 @@ while(!cond){
 }
 
 simdat <- t(apply(dyn, 2, function(x) x/sum(x)))
+simdat2 <- t(apply(dyn[order(apply(dyn, 1, median), decreasing = T)[1:10],], 2, function(x) x/sum(x)))
+simdat3 <-  t(apply(rbind(dyn[order(apply(dyn, 1, median), decreasing = T)[1:10],], colSums(dyn[-order(apply(dyn, 1, median), decreasing = T)[1:10],])), 2, function(x) x/sum(x)))
+simdat4 <- t(dyn[order(apply(dyn, 1, median), decreasing = T)[1:10],])   
+simdat5 <- t(rbind(dyn[order(apply(dyn, 1, median), decreasing = T)[1:10],], colSums(dyn[-order(apply(dyn, 1, median), decreasing = T)[1:10],])))
+
 ```
 
 ```{r echo = F}
@@ -226,8 +232,18 @@ matplot(simdat, typ = "l", xlab = "Time", ylab = "Relative Abundance")
 ### LIMITS on simulated data
 ```{r limitrun}
 ltest <- limits(simdat, 5, 200)
+ltest2 <- limits(simdat2, 5, 200)
+ltest3 <- limits(simdat3, 5, 200)
+ltest4 <- limits(simdat4, 5, 200)
+ltest5 <- limits(simdat5, 5, 200)
 
 ct.est <- cor.test(as.vector(ltest), as.vector(gp1$p$cij))$estimate
+ct.est2 <- cor.test(as.vector(ltest2), as.vector(gp1$p$cij[order(apply(simdat, 2, median), decreasing = T)[1:10],order(apply(simdat, 2, median), decreasing = T)[1:10]]))$estimate
+ct.est3 <- cor.test(as.vector(ltest3[1:10,1:10]), as.vector(gp1$p$cij[order(apply(simdat, 2, median), decreasing = T)[1:10],order(apply(simdat, 2, median), decreasing = T)[1:10]]))$estimate
+
+
+
+
 ```
 
 ```{r echo = F}
@@ -252,7 +268,6 @@ mycor <- cor.test(df1$mypred, df1$real)
 fmcor <- cor.test(df1$fmpred, df1$real)
 
 predcor <- cor.test(df1$fmpred, df1$mypred)
-
 ```
 
 ```{r echo = F}
@@ -263,6 +278,115 @@ cat("\n", "Correlation between my code output and known cij = ", mycor$estimate,
 ```{r echo = F}
 #knitr::kable(table(sign(df1$mypred), sign(df1$real)), caption = "R Code", format = "html", align = "c")
 #knitr::kable(table(sign(df1$fmpred), sign(df1$real)), caption = "Mathematica", format = "html", align = "c")
+```
+
+## Specificity and Sensitivity
+
+Specificity 
+$$
+\frac{TN}{(TN + FP)}
+$$
+Sensitivity
+$$
+\frac{TP}{TP + FN}
+$$
+Where _TN_ is when both predicted and observed interactions are 0, _TP_ is when the predicted and observed interaction are non-zero with the same sign, _FP_ is when there is a predicted interaction but none observed, and _FN_ is when there is no predicted interaction but one is observed. 
+
+```{r}
+spec_sens <- function(real, pred){
+  #diag(real) <- 0
+  #diag(pred) <- 0
+  t1 <- table(real,pred)
+  sns <- (sum(t1[c(1,9)])-nrow(real))/(sum(t1[c(1,9,4,6)])-nrow(real))
+  spc <- t1[5]/sum(t1[c(2,5,8)]) 
+  return(c(specificity = spc, sensitivity = sns))
+}
+
+int.reALL <- sign(gp1$p$cij)
+int.re10 <- sign(gp1$p$cij[order(apply(simdat, 2, median), decreasing = T)[1:10],order(apply(simdat, 2, median), decreasing = T)[1:10]])
+int.pred <- sign(ltest)
+int.pred1 <- sign(ltest2)
+int.pred2 <- sign(ltest3[1:10, 1:10])
+int.pred3 <- sign(ltest4)
+int.pred4 <- sign(ltest5[1:10, 1:10])
+
+spec_sens(int.reALL, int.pred)
+spec_sens(int.re10, int.pred1)
+spec_sens(int.re10, int.pred2)
+spec_sens(int.re10, int.pred3)
+spec_sens(int.re10, int.pred4)
+```
+
+
+```{r}
+simfun <- function(N.species, N.links, t.fin, sub){
+  cond <- FALSE
+  while(!cond){
+    gp1 <- get_pars(N.species, N.links, t.fin)
+    dyn <- lv_ricker(1:t.fin, gp1$m, gp1$p)
+    
+    if(sum(is.nan(dyn)) > 0){
+      cond <- FALSE
+      next
+    }else if(sum(dyn[,t.fin] < 10^-5) > 0){
+      cond <- FALSE
+      next
+    }else{
+      cond <- TRUE
+    }
+  }
+  
+  simdat <- t(apply(dyn, 2, function(x) x/sum(x)))
+  simdat2 <- t(apply(dyn[order(apply(dyn, 1, median), decreasing = T)[1:sub],], 2, function(x) x/sum(x)))
+  simdat3 <-  t(apply(rbind(dyn[order(apply(dyn, 1, median), decreasing = T)[1:sub],], 
+                            colSums(dyn[-order(apply(dyn, 1, median), decreasing = T)[1:sub],])), 2, function(x) x/sum(x)))
+  simdat4 <- t(dyn)
+  simdat5 <- t(dyn[order(apply(dyn, 1, median), decreasing = T)[1:sub],])   
+  simdat6 <- t(rbind(dyn[order(apply(dyn, 1, median), decreasing = T)[1:sub],], colSums(dyn[-order(apply(dyn, 1, median), decreasing = T)[1:sub],])))
+  
+  simlist <- list(simdat, simdat2, simdat3, simdat4, simdat5, simdat6)
+  
+  return(list(sl = simlist, par = gp1, ord = order(apply(dyn, 1, median), decreasing = T)[1:sub]))
+}
+
+get_ss <- function(lims, dat, ord){
+  int.reALL <- sign(dat$p$cij)
+  int.re10 <- sign(dat$p$cij[ord,ord])
+  int.pred <- lapply(lims, sign)
+  
+  ss1 <- spec_sens(int.reALL, int.pred[[1]])
+  ss2 <- spec_sens(int.re10, int.pred[[2]])
+  ss3 <- spec_sens(int.re10, int.pred[[3]][1:10,1:10])
+  ss4 <- spec_sens(int.reALL, int.pred[[4]])
+  ss5 <- spec_sens(int.re10, int.pred[[5]])
+  ss6 <- spec_sens(int.re10, int.pred[[6]][1:10, 1:10])
+  
+  ssall <- rbind(ss1, ss2, ss3, ss4, ss5, ss6)
+  
+  rownames(ssall) <- c("Allrel", "rel10", "relOth", "Allabs", "abs10", "absOth")
+  
+  return(ssall)
+}
+
+
+N <- c(12, 16, 20, 24)
+L <- c(.1,.2,.3)
+er <- rep(seq(.5, 5, .5), 3)
+egdat <- (expand.grid(N, L, er))
+dflist <- list()
+for(i in 1:nrow(egdat)){
+  links <- floor(egdat[i,1]^2*egdat[i,2])
+  test <- simfun(egdat[i,1], links, 1000, 10)
+  print("sim done")
+  lims1 <- lapply(test$sl, limits, errT = egdat[i,3], 100)
+  
+  gs1 <- get_ss(lims1, dat = test$par, ord = test$ord)
+  dflist[[i]] <- data.frame(melt(gs1), err = egdat[i,3], L = links, N = egdat[i,1])
+  print(i)
+}
+
+
+res <- rbindlist(res)
 ```
 
 
