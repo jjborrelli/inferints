@@ -370,7 +370,7 @@ get_ss <- function(lims, dat, ord){
 
 
 N <- c(12, 16, 20, 24)
-L <- c(.1,.2,.3)
+L <- c(.05,.1,.15)
 er <- rep(seq(.5, 5, .5), 3)
 egdat <- (expand.grid(N, L, er))
 dflist <- list()
@@ -383,7 +383,7 @@ for(i in 1:nrow(egdat)){
   gs1 <- get_ss(lims1, dat = test$par, ord = test$ord)
   dflist[[i]] <- data.frame(melt(gs1), err = egdat[i,3], L = links, N = egdat[i,1])
   print(i)
-}
+} 
 
 
 res <- rbindlist(res)
