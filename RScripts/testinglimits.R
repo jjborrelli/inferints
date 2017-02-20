@@ -192,7 +192,7 @@ get_ss <- function(lims, dat, ord){
 }
 
 N <- c(12, 16)
-L <- c(.1,.2,.3)
+L <- c(.1,.2)
 er <- rep(seq(.5, 5, .5), 3)
 egdat <- (expand.grid(N, L, er))
 head(egdat, 10)
@@ -207,3 +207,15 @@ for(i in 1:nrow(egdat)){
   dflist[[i]] <- data.frame(melt(gs1), err = egdat[i,3], L = links, N = egdat[i,1])
   print(i)
 }
+
+library(data.table)
+library(ggplot2)
+dflist
+dflist2 <- rbindlist(dflist)
+dflist2
+ggplot(dflist2, aes(x = err, y = value, col = factor(L))) + geom_smooth() + facet_grid(Var1~Var2)
+
+ggplot(dflist2, aes(x = Var1, y = value)) + geom_boxplot(aes(fill = factor(L))) + facet_grid(err~Var2)
+
+#save.image("~/Desktop/GitHub/inferints/Data/limtstest.Rdata")
+#load("~/Desktop/GitHub/inferints/Data/limtstest.Rdata")
